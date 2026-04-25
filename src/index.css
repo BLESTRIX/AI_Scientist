@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Dark base — deep slate */
+    --background: 222 47% 5%;
+    --foreground: 210 40% 96%;
+
+    /* Glass surfaces */
+    --card: 222 40% 8%;
+    --card-foreground: 210 40% 96%;
+    --glass: 222 40% 10%;
+    --glass-border: 210 40% 96%;
+
+    --popover: 222 47% 7%;
+    --popover-foreground: 210 40% 96%;
+
+    /* Neon teal primary */
+    --primary: 174 84% 55%;
+    --primary-foreground: 222 47% 6%;
+    --primary-glow: 174 100% 65%;
+
+    /* Neon purple secondary accent */
+    --secondary: 268 83% 62%;
+    --secondary-foreground: 210 40% 98%;
+    --secondary-glow: 268 100% 75%;
+
+    --muted: 222 30% 14%;
+    --muted-foreground: 215 20% 70%;
+
+    --accent: 192 95% 60%;
+    --accent-foreground: 222 47% 6%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 38 95% 60%;
+    --warning-foreground: 222 47% 6%;
+
+    --success: 152 70% 50%;
+    --success-foreground: 222 47% 6%;
+
+    --border: 210 40% 96%;
+    --input: 222 30% 16%;
+    --ring: 174 84% 55%;
+
+    --radius: 0.875rem;
+
+    /* Aurora gradient stops */
+    --aurora-purple: 268 83% 50%;
+    --aurora-teal: 174 84% 45%;
+    --aurora-blue: 220 90% 55%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    --gradient-neon: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+    --shadow-neon: 0 0 32px -4px hsl(var(--primary) / 0.5);
+    --shadow-glass: 0 8px 32px -8px hsl(222 80% 2% / 0.6);
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Inherits from :root — kept identical for explicit dark class */
+    --background: 222 47% 5%;
+    --foreground: 210 40% 96%;
+    --card: 222 40% 8%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 7%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 174 84% 55%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 268 83% 62%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 30% 14%;
+    --muted-foreground: 215 20% 70%;
+    --accent: 192 95% 60%;
+    --accent-foreground: 222 47% 6%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 210 40% 96%;
+    --input: 222 30% 16%;
+    --ring: 174 84% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border/10;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-card/40 backdrop-blur-xl border border-border/10 rounded-[var(--radius)];
+    box-shadow: var(--shadow-glass);
+  }
+  .glass-strong {
+    @apply bg-card/60 backdrop-blur-2xl border border-border/15 rounded-[var(--radius)];
+    box-shadow: var(--shadow-glass);
+  }
+  .neon-glow {
+    box-shadow: var(--shadow-neon);
+  }
+  .text-gradient-neon {
+    background: var(--gradient-neon);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  @keyframes aurora-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(40px, -30px) scale(1.1); }
+    66% { transform: translate(-30px, 40px) scale(0.95); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 20px -2px hsl(var(--primary) / 0.4); }
+    50% { box-shadow: 0 0 40px 0 hsl(var(--primary) / 0.7); }
+  }
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-aurora { animation: aurora-drift 18s ease-in-out infinite; }
+  .animate-pulse-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
+  .animate-fade-up { animation: fade-up 0.5s ease-out both; }
+}
