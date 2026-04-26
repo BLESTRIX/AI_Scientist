@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
 const EXAMPLES = [
@@ -12,10 +11,7 @@ const EXAMPLES = [
 ];
 
 type Props = {
-  onSubmit: (
-    hypothesis: string,
-    options?: { deepLiterature: boolean },
-  ) => void;
+  onSubmit: (hypothesis: string) => void;
   preferredDomains: string;
   onPreferredDomainsChange: (value: string) => void;
 };
@@ -26,13 +22,12 @@ const HypothesisInput = ({
   onPreferredDomainsChange,
 }: Props) => {
   const [value, setValue] = useState("");
-  const [deepLiterature, setDeepLiterature] = useState(false);
 
   const handleSubmit = () => {
     const v = value.trim();
     if (!v) return;
 
-    onSubmit(v, { deepLiterature });
+    onSubmit(v);
   };
 
   return (
@@ -77,27 +72,6 @@ const HypothesisInput = ({
                 placeholder="arxiv.org, nature.com"
                 className="h-11 border-border/20 bg-white/5 text-sm text-foreground placeholder:text-muted-foreground/55 backdrop-blur-md focus-visible:border-primary/40 focus-visible:ring-1 focus-visible:ring-primary/30"
               />
-            </div>
-            <div className="rounded-xl border border-border/15 bg-card/20 px-4 py-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <label
-                    htmlFor="deep-literature"
-                    className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
-                  >
-                    Deep Literature Mode
-                  </label>
-                  <p className="text-xs text-muted-foreground/80">
-                    Fetch full-text methods from top papers and use them while generating protocol steps.
-                  </p>
-                </div>
-                <Switch
-                  id="deep-literature"
-                  checked={deepLiterature}
-                  onCheckedChange={setDeepLiterature}
-                  aria-label="Toggle deep literature mode"
-                />
-              </div>
             </div>
             <div className="flex items-center justify-between gap-3 pt-1">
               <span className="text-[11px] text-muted-foreground">
