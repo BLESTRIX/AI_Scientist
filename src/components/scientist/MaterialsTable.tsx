@@ -27,6 +27,17 @@ const getSafeExternalUrl = (value: string | null | undefined) => {
   }
 };
 
+const buildSupplierSearchUrl = (material: Material) => {
+  const terms = [material.supplier, material.item, material.catalog_number]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  if (!terms) return null;
+
+  return `https://www.google.com/search?q=${encodeURIComponent(terms)}`;
+};
+
 const MaterialsTable = ({ materials, totalCost }: Props) => {
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -47,6 +58,7 @@ const MaterialsTable = ({ materials, totalCost }: Props) => {
       <ul className="divide-y divide-border/10">
         {materials.map((m) => {
           const safeUrl = getSafeExternalUrl(m.url);
+          const fallbackSearchUrl = safeUrl ? null : buildSupplierSearchUrl(m);
 
           return (
           <li key={m.catalog_number} className="py-3">
@@ -86,6 +98,17 @@ const MaterialsTable = ({ materials, totalCost }: Props) => {
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
                     Visit site
+                  </a>
+                )}
+                {fallbackSearchUrl && (
+                  <a
+                    href={fallbackSearchUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Find online
                   </a>
                 )}
               </div>

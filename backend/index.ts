@@ -2,8 +2,7 @@ const express = require("express") as typeof import("express");
 const cors = require("cors") as typeof import("cors");
 const dotenv = require("dotenv") as typeof import("dotenv");
 const Groq = require("groq-sdk").default as typeof import("groq-sdk").default;
-const { Client, Databases, ID, Query } =
-  require("node-appwrite") as typeof import("node-appwrite");
+const { createClient } = require("@supabase/supabase-js") as typeof import("@supabase/supabase-js");
 
 type Request = import("express").Request;
 type Response = import("express").Response;
@@ -98,19 +97,24 @@ interface ProcurementOutput {
   budget_total?: number;
 }
 
-// ─── Appwrite correction document shape ───────────────────────────────────────
+// ─── Corrections row shape ────────────────────────────────────────────────────
 
-interface CorrectionDocument {
-  $id: string;
-  $createdAt: string;
+interface CorrectionRow {
+  created_at: string;
   hypothesis: string;
   correction: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const APPWRITE_DB_ID = "ai_scientist_db";
-const APPWRITE_COLLECTION_ID = "corrections";
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_ANON_KEY ??
+  process.env.VITE_SUPABASE_ANON_KEY ??
+  "";
+const CORRECTIONS_TABLE = "corrections";
 const GROQ_QC_MODEL = process.env.GROQ_QC_MODEL ?? "llama-3.3-70b-versatile";
 const GROQ_GENERATE_MODEL =
   process.env.GROQ_GENERATE_MODEL ?? "llama-3.3-70b-versatile";
@@ -170,14 +174,14 @@ app.use(express.json());
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// ─── Init: Appwrite ───────────────────────────────────────────────────────────
+// ─── Init: Supabase ───────────────────────────────────────────────────────────
 
-const appwriteClient = new Client()
-  .setEndpoint(process.env.APPWRITE_ENDPOINT ?? "https://cloud.appwrite.io/v1")
-  .setProject(process.env.APPWRITE_PROJECT_ID ?? "")
-  .setKey(process.env.APPWRITE_API_KEY ?? "");
-
-const db = new Databases(appwriteClient);
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
 
 // ─── Helper: Extract domain from URL ──────────────────────────────────────────
 
@@ -249,22 +253,19 @@ app.post("/api/corrections", async (req: Request, res: Response) => {
   }
 
   try {
-    await db.createDocument(
-      APPWRITE_DB_ID,
-      APPWRITE_COLLECTION_ID,
-      ID.unique(),
-      {
-        hypothesis: hypothesis.trim(),
-        correction: correction.trim(),
-      },
-    );
+    const { error } = await supabase.from(CORRECTIONS_TABLE).insert({
+      hypothesis: hypothesis.trim(),
+      correction: correction.trim(),
+    });
+
+    if (error) throw error;
 
     res.json({
       success: true,
       message: "Correction saved to feedback loop.",
     });
   } catch (err) {
-    console.error("/api/corrections Appwrite error:", err);
+    console.error("/api/corrections Supabase error:", err);
     res.status(500).json({
       error: "Failed to save correction.",
       detail: String(err),
@@ -744,18 +745,19 @@ app.post("/api/generate", async (req: Request, res: Response) => {
     }
   }
 
-  // ── Step 2: Fetch past corrections from Appwrite (non-fatal) ─────────────────
+  // ── Step 2: Fetch past corrections from Supabase (non-fatal) ─────────────────
   let learnedKnowledge = "";
 
   try {
-    const correctionDocs = await db.listDocuments(
-      APPWRITE_DB_ID,
-      APPWRITE_COLLECTION_ID,
-      [Query.limit(5), Query.orderDesc("$createdAt")],
-    );
+    const { data, error } = await supabase
+      .from(CORRECTIONS_TABLE)
+      .select("hypothesis, correction, created_at")
+      .order("created_at", { ascending: false })
+      .limit(5);
 
-    const corrections =
-      correctionDocs.documents as unknown as CorrectionDocument[];
+    if (error) throw error;
+
+    const corrections = (data ?? []) as CorrectionRow[];
 
     if (corrections.length > 0) {
       const correctionLines = corrections
@@ -774,10 +776,10 @@ ${correctionLines}
         `Injecting ${corrections.length} past correction(s) into system prompt.`,
       );
     }
-  } catch (appwriteErr) {
+  } catch (supabaseErr) {
     console.error(
-      "Appwrite corrections fetch failed — continuing without feedback data:",
-      appwriteErr,
+      "Supabase corrections fetch failed — continuing without feedback data:",
+      supabaseErr,
     );
   }
 
@@ -911,9 +913,8 @@ app.listen(PORT, () => {
   console.log(`🧪 The AI Scientist backend running on http://localhost:${PORT}`);
   console.log(`   GROQ_API_KEY      : ${process.env.GROQ_API_KEY ? "✓ set" : "✗ MISSING"}`);
   console.log(`   TAVILY_API_KEY    : ${process.env.TAVILY_API_KEY ? "✓ set" : "✗ MISSING"}`);
-  console.log(`   APPWRITE_ENDPOINT : ${process.env.APPWRITE_ENDPOINT ? "✓ set" : "✗ MISSING"}`);
-  console.log(`   APPWRITE_PROJECT  : ${process.env.APPWRITE_PROJECT_ID ? "✓ set" : "✗ MISSING"}`);
-  console.log(`   APPWRITE_API_KEY  : ${process.env.APPWRITE_API_KEY ? "✓ set" : "✗ MISSING"}`);
+  console.log(`   SUPABASE_URL      : ${SUPABASE_URL ? "✓ set" : "✗ MISSING"}`);
+  console.log(`   SUPABASE_KEY      : ${SUPABASE_SERVICE_ROLE_KEY ? "✓ set" : "✗ MISSING"}`);
 });
 
 module.exports = app;
