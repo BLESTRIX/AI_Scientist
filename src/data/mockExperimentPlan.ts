@@ -36,6 +36,7 @@ export interface Material {
   quantity: string;
   estimated_price: number;
   notes: string;
+  url?: string | null;
 }
 
 export interface TimelinePhase {

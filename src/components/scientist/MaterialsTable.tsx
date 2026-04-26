@@ -1,4 +1,4 @@
-import { Copy, DollarSign, Info } from "lucide-react";
+import { Copy, DollarSign, ExternalLink, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Material } from "@/data/mockExperimentPlan";
@@ -14,6 +14,18 @@ const fmt = (n: number) =>
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(n);
+
+const getSafeExternalUrl = (value: string | null | undefined) => {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 const MaterialsTable = ({ materials, totalCost }: Props) => {
   const copy = (text: string) => {
@@ -33,7 +45,10 @@ const MaterialsTable = ({ materials, totalCost }: Props) => {
       </header>
 
       <ul className="divide-y divide-border/10">
-        {materials.map((m) => (
+        {materials.map((m) => {
+          const safeUrl = getSafeExternalUrl(m.url);
+
+          return (
           <li key={m.catalog_number} className="py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -62,13 +77,25 @@ const MaterialsTable = ({ materials, totalCost }: Props) => {
                     <span className="leading-relaxed">{m.notes}</span>
                   </div>
                 )}
+                {safeUrl && (
+                  <a
+                    href={safeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Visit site
+                  </a>
+                )}
               </div>
               <div className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                 {fmt(m.estimated_price)}
               </div>
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <div className="mt-5 rounded-xl border border-primary/30 bg-gradient-to-r from-primary/15 via-primary/10 to-secondary/10 p-4">

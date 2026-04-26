@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Edit2, Check, X, Clock, ChevronDown, ShieldAlert } from "lucide-react";
+import { Edit2, Check, X, Clock, ChevronDown, ShieldAlert, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -7,32 +7,58 @@ import type { ProtocolStep } from "@/data/mockExperimentPlan";
 
 type Props = {
   steps: ProtocolStep[];
+  /** Called when the user saves a corrected step description. Receives the full corrected text. */
+  onCorrectionSubmit?: (correction: string) => Promise<void>;
 };
 
-const ProtocolStepper = ({ steps: initial }: Props) => {
+const ProtocolStepper = ({ steps: initial, onCorrectionSubmit }: Props) => {
   const [steps, setSteps] = useState(initial);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set([1]));
   const [modified, setModified] = useState<Set<number>>(new Set());
+  const [submitting, setSubmitting] = useState(false);
 
   const startEdit = (step: ProtocolStep) => {
     setEditingId(step.step_number);
     setDraft(step.description);
   };
 
-  const save = (id: number) => {
+  const save = async (id: number) => {
+    const step = steps.find((s) => s.step_number === id);
+    if (!step) return;
+
+    // Optimistically update local state
     setSteps((prev) =>
       prev.map((s) => (s.step_number === id ? { ...s, description: draft } : s)),
     );
     setModified((prev) => new Set(prev).add(id));
     setEditingId(null);
-    toast.success("Step updated", {
-      description: "We'll incorporate your feedback in the next regeneration.",
-    });
+
+    // Build a descriptive correction string for the feedback loop
+    const correctionText = `In step ${id} ("${step.title}"), the description was corrected to: ${draft.trim()}`;
+
+    if (onCorrectionSubmit) {
+      setSubmitting(true);
+      try {
+        await onCorrectionSubmit(correctionText);
+        // Toast is fired in Index.tsx's handleCorrectionSubmit on success
+      } catch {
+        // Index.tsx handles the error toast; nothing extra needed here
+      } finally {
+        setSubmitting(false);
+      }
+    } else {
+      toast.success("Step updated", {
+        description: "Changes applied locally.",
+      });
+    }
   };
 
-  const cancel = () => setEditingId(null);
+  const cancel = () => {
+    setEditingId(null);
+    setDraft("");
+  };
 
   const toggleExpanded = (id: number) => {
     setExpanded((prev) => {
@@ -50,24 +76,27 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
             Experimental Protocol
           </h2>
           <p className="text-xs text-muted-foreground">
-            {steps.length} steps · Click any step to refine it
+            {steps.length} steps · Click the edit icon on any step to refine it
           </p>
         </div>
       </header>
 
       <ol className="relative space-y-4">
+        {/* Vertical connector line */}
         <div
           aria-hidden
           className="absolute left-[15px] top-2 bottom-2 w-px bg-gradient-to-b from-primary/40 via-border/20 to-transparent"
         />
+
         {steps.map((step) => {
           const isEditing = editingId === step.step_number;
           const isModified = modified.has(step.step_number);
           const isOpen = expanded.has(step.step_number);
-          const params = Object.entries(step.key_parameters);
+          const params = Object.entries(step.key_parameters ?? {});
 
           return (
             <li key={step.step_number} className="relative pl-12">
+              {/* Step number badge */}
               <span
                 className={`absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${
                   isModified
@@ -87,6 +116,7 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
+                    {/* Title row */}
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-semibold text-foreground">
                         {step.title}
@@ -97,23 +127,30 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
                       </span>
                       {isModified && (
                         <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
-                          modified
+                          modified · sent to loop
                         </span>
                       )}
                     </div>
 
+                    {/* Edit mode */}
                     {isEditing ? (
                       <div className="mt-3 space-y-2">
                         <Textarea
                           value={draft}
                           onChange={(e) => setDraft(e.target.value)}
                           className="min-h-[140px] bg-background/60 border-border/15 text-sm"
+                          placeholder="Describe the corrected procedure…"
+                          disabled={submitting}
                         />
+                        <p className="text-[11px] text-muted-foreground">
+                          Your correction will be saved to the intelligence loop and improve future plans.
+                        </p>
                         <div className="flex justify-end gap-2">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={cancel}
+                            disabled={submitting}
                             className="text-muted-foreground"
                           >
                             <X className="mr-1 h-3.5 w-3.5" />
@@ -122,10 +159,20 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
                           <Button
                             size="sm"
                             onClick={() => save(step.step_number)}
+                            disabled={submitting || !draft.trim()}
                             className="bg-primary text-primary-foreground hover:bg-primary/90"
                           >
-                            <Check className="mr-1 h-3.5 w-3.5" />
-                            Save
+                            {submitting ? (
+                              <>
+                                <span className="mr-1.5 h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                                Saving…
+                              </>
+                            ) : (
+                              <>
+                                <Send className="mr-1 h-3.5 w-3.5" />
+                                Save & Submit
+                              </>
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -135,6 +182,7 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
                       </p>
                     )}
 
+                    {/* Expandable details */}
                     {!isEditing && (params.length > 0 || step.safety_notes) && (
                       <div className="mt-3">
                         <button
@@ -144,7 +192,9 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
                           <ChevronDown
                             className={`h-3 w-3 transition-transform ${isOpen ? "rotate-180" : ""}`}
                           />
-                          {isOpen ? "Hide details" : `Show ${params.length} parameters`}
+                          {isOpen
+                            ? "Hide details"
+                            : `Show ${params.length} parameter${params.length !== 1 ? "s" : ""}`}
                         </button>
 
                         {isOpen && (
@@ -188,6 +238,7 @@ const ProtocolStepper = ({ steps: initial }: Props) => {
                     )}
                   </div>
 
+                  {/* Edit trigger button */}
                   {!isEditing && step.editable && (
                     <Button
                       size="icon"

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const EXAMPLES = [
@@ -11,9 +12,15 @@ const EXAMPLES = [
 
 type Props = {
   onSubmit: (hypothesis: string) => void;
+  preferredDomains: string;
+  onPreferredDomainsChange: (value: string) => void;
 };
 
-const HypothesisInput = ({ onSubmit }: Props) => {
+const HypothesisInput = ({
+  onSubmit,
+  preferredDomains,
+  onPreferredDomainsChange,
+}: Props) => {
   const [value, setValue] = useState("");
 
   const handleSubmit = () => {
@@ -49,18 +56,35 @@ const HypothesisInput = ({ onSubmit }: Props) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit();
             }}
           />
-          <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-2">
-            <span className="text-[11px] text-muted-foreground">
-              ⌘ + Enter to generate
-            </span>
-            <Button
-              onClick={handleSubmit}
-              disabled={!value.trim()}
-              className="group bg-primary text-primary-foreground hover:bg-primary/90 neon-glow animate-pulse-glow"
-            >
-              Generate Experiment Plan
-              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </Button>
+          <div className="space-y-3 px-2 pb-1 pt-3">
+            <div className="space-y-2 text-left">
+              <label
+                htmlFor="preferred-domains"
+                className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+              >
+                Preferred Domains (Optional, comma-separated)
+              </label>
+              <Input
+                id="preferred-domains"
+                value={preferredDomains}
+                onChange={(e) => onPreferredDomainsChange(e.target.value)}
+                placeholder="arxiv.org, nature.com"
+                className="h-11 border-border/20 bg-white/5 text-sm text-foreground placeholder:text-muted-foreground/55 backdrop-blur-md focus-visible:border-primary/40 focus-visible:ring-1 focus-visible:ring-primary/30"
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <span className="text-[11px] text-muted-foreground">
+                ⌘ + Enter to generate
+              </span>
+              <Button
+                onClick={handleSubmit}
+                disabled={!value.trim()}
+                className="group bg-primary text-primary-foreground hover:bg-primary/90 neon-glow animate-pulse-glow"
+              >
+                Generate Experiment Plan
+                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Button>
+            </div>
           </div>
         </div>
 
