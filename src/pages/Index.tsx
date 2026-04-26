@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
-import { FlaskConical, Microscope, Download, Loader2 } from "lucide-react";
+import { FlaskConical, Microscope, Download, Loader2, BookMarked, Save, MessageSquare } from "lucide-react";
 import AuroraBackground from "@/components/layout/AuroraBackground";
 import TopNav from "@/components/layout/TopNav";
 import HypothesisInput from "@/components/scientist/HypothesisInput";
@@ -10,10 +10,14 @@ import ProtocolStepper from "@/components/scientist/ProtocolStepper";
 import MaterialsTable from "@/components/scientist/MaterialsTable";
 import TimelineBar from "@/components/scientist/TimelineBar";
 import EquipmentManager from "@/components/scientist/EquipmentManager";
+import SavedExperiments from "@/components/scientist/SAvedExperiments";
+import CorrectionsHistory from "@/components/scientist/CorrectionHistory";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import type { ExperimentData, NoveltyCheck } from "@/data/mockExperimentPlan";
+import type { SavedExperiment } from "@/components/scientist/SAvedExperiments";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 
@@ -36,6 +40,7 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("experiment");
   const [isExporting, setIsExporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const parsedPreferredDomains = preferredDomains
     .split(",")
@@ -74,7 +79,7 @@ const Index = () => {
 
         const noveltyCheck: NoveltyCheck = await qcRes.json();
 
-        // Step 2: Generation — now passes user_id for smart procurement
+        // Step 2: Generation
         setLoadingPhase("generating");
 
         const generateRes = await fetch(`${API_BASE}/api/generate`, {
@@ -84,7 +89,7 @@ const Index = () => {
             hypothesis: h,
             qc_summary: noveltyCheck.summary,
             preferred_domains: parsedPreferredDomains,
-            user_id: user?.id,   // ← passes authenticated user ID for smart procurement
+            user_id: user?.id,
           }),
         });
 
@@ -148,13 +153,41 @@ const Index = () => {
     [parsedPreferredDomains, user?.id]
   );
 
+  // ── Save experiment handler ────────────────────────────────────────────────
+
+  const handleSave = useCallback(async () => {
+    if (!experimentData || !user) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from("saved_experiments").insert({
+        user_id: user.id,
+        hypothesis: experimentData.hypothesis,
+        protocol_data: {
+          protocol: experimentData.protocol,
+          materials: experimentData.materials,
+          timeline_phases: experimentData.timeline_phases,
+          novelty_check: experimentData.novelty_check,
+          application_justification: (experimentData as any).application_justification,
+        },
+        budget_total: experimentData.budget_total,
+      });
+      if (error) throw error;
+      toast.success("Experiment saved!", {
+        description: "Find it in the History tab for future reference.",
+      });
+    } catch (err: any) {
+      toast.error("Save failed", { description: err?.message || "Could not save experiment." });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [experimentData, user]);
+
   // ── Export handler ─────────────────────────────────────────────────────────
 
   const handleExport = useCallback(async () => {
     if (!experimentData) return;
     setIsExporting(true);
     try {
-      // Dynamic import to keep the docx bundle out of the initial chunk
       const { exportExperimentToDocx } = await import("@/lib/exportDocx");
       await exportExperimentToDocx(experimentData, profile);
       toast.success("Proposal exported!", {
@@ -169,6 +202,25 @@ const Index = () => {
       setIsExporting(false);
     }
   }, [experimentData, profile]);
+
+  // ── Load saved experiment ─────────────────────────────────────────────────
+
+  const handleLoadSaved = useCallback((saved: SavedExperiment) => {
+    if (!saved.protocol_data) return;
+    const data: ExperimentData = {
+      hypothesis: saved.hypothesis,
+      novelty_check: saved.protocol_data.novelty_check ?? { signal: "not found", summary: "", references: [] },
+      protocol: saved.protocol_data.protocol ?? [],
+      materials: saved.protocol_data.materials ?? [],
+      budget_total: saved.budget_total ?? 0,
+      timeline_phases: saved.protocol_data.timeline_phases ?? [],
+    };
+    setHypothesis(saved.hypothesis);
+    setExperimentData(data as any);
+    setLoadingPhase("done");
+    setActiveTab("experiment");
+    toast.success("Experiment loaded", { description: "Protocol restored from saved history." });
+  }, []);
 
   // ── Correction callback ────────────────────────────────────────────────────
 
@@ -233,6 +285,20 @@ const Index = () => {
                 <Microscope className="h-3.5 w-3.5" />
                 Lab Profile
               </TabsTrigger>
+              <TabsTrigger
+                value="history"
+                className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none gap-2"
+              >
+                <BookMarked className="h-3.5 w-3.5" />
+                History
+              </TabsTrigger>
+              <TabsTrigger
+                value="corrections"
+                className="data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none gap-2"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Corrections
+              </TabsTrigger>
             </TabsList>
 
             {/* ── Tab 1: Experiment ── */}
@@ -265,35 +331,55 @@ const Index = () => {
               {/* Results view */}
               {showResults && experimentData && (
                 <div className="space-y-6 pt-2">
-                  {/* Hypothesis + export button row */}
+                  {/* Hypothesis + action buttons row */}
                   <div className="animate-fade-up flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                        Hypothesis
-                      </p>
+                      <p className="text-xs uppercase tracking-wider text-muted-foreground">Hypothesis</p>
                       <h1 className="mt-1 max-w-4xl text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                         {hypothesis}
                       </h1>
                     </div>
 
-                    {/* ── EXPORT BUTTON ── */}
-                    <Button
-                      onClick={handleExport}
-                      disabled={isExporting}
-                      className="shrink-0 bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:opacity-90 neon-glow gap-2"
-                    >
-                      {isExporting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Exporting…
-                        </>
-                      ) : (
-                        <>
-                          <Download className="h-4 w-4" />
-                          Export Formal Proposal (.docx)
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      {/* ── SAVE BUTTON ── */}
+                      <Button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        variant="outline"
+                        className="border-border/20 bg-card/40 hover:bg-card/70 gap-2"
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Saving…
+                          </>
+                        ) : (
+                          <>
+                            <Save className="h-4 w-4" />
+                            Save
+                          </>
+                        )}
+                      </Button>
+
+                      {/* ── EXPORT BUTTON ── */}
+                      <Button
+                        onClick={handleExport}
+                        disabled={isExporting}
+                        className="bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:opacity-90 neon-glow gap-2"
+                      >
+                        {isExporting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Exporting…
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4" />
+                            Export Proposal (.docx)
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
 
                   <NoveltyCard
@@ -302,7 +388,6 @@ const Index = () => {
                     references={experimentData.novelty_check.references}
                   />
 
-                  {/* Application justification card (if present) */}
                   {(experimentData as any).application_justification && (
                     <div className="glass-strong p-6 animate-fade-up">
                       <p className="text-xs font-semibold uppercase tracking-wider text-secondary mb-2">
@@ -332,7 +417,26 @@ const Index = () => {
                   <TimelineBar phases={experimentData.timeline_phases} />
 
                   {/* Bottom export CTA */}
-                  <div className="flex justify-center pt-4 animate-fade-up">
+                  <div className="flex justify-center gap-3 pt-4 animate-fade-up">
+                    <Button
+                      onClick={handleSave}
+                      disabled={isSaving}
+                      variant="outline"
+                      size="lg"
+                      className="border-border/20 bg-card/40 hover:bg-card/70 gap-2"
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Saving…
+                        </>
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4" />
+                          Save to History
+                        </>
+                      )}
+                    </Button>
                     <Button
                       onClick={handleExport}
                       disabled={isExporting}
@@ -372,9 +476,7 @@ const Index = () => {
                         { label: "Department", value: profile.department },
                       ].map(({ label, value }) => (
                         <div key={label} className="space-y-1">
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {label}
-                          </p>
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
                           <p className="font-medium text-foreground">{value || "—"}</p>
                         </div>
                       ))}
@@ -386,19 +488,49 @@ const Index = () => {
                   {profile ? (
                     <EquipmentManager profileId={profile.id} />
                   ) : (
-                    <div className="glass p-8 text-center animate-fade-up">
+                    <div className="glass p-8 text-center">
                       <p className="text-muted-foreground text-sm">Loading profile…</p>
                     </div>
                   )}
                 </div>
 
                 {!profile && (
-                  <div className="glass p-8 text-center animate-fade-up">
+                  <div className="glass p-8 text-center">
                     <p className="text-muted-foreground text-sm">
                       No profile found. Please register to create one.
                     </p>
                   </div>
                 )}
+              </div>
+            </TabsContent>
+
+            {/* ── Tab 3: History ── */}
+            <TabsContent value="history">
+              <div className="max-w-3xl mx-auto py-6 space-y-4 animate-fade-up">
+                <div className="flex items-center gap-3 mb-2">
+                  <BookMarked className="h-5 w-5 text-primary" />
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-tight text-foreground">Saved Experiments</h2>
+                    <p className="text-xs text-muted-foreground">Click "Load" to restore any previous experiment plan.</p>
+                  </div>
+                </div>
+                <SavedExperiments onLoad={handleLoadSaved} />
+              </div>
+            </TabsContent>
+
+            {/* ── Tab 4: Corrections ── */}
+            <TabsContent value="corrections">
+              <div className="max-w-3xl mx-auto py-6 space-y-4 animate-fade-up">
+                <div className="flex items-center gap-3 mb-2">
+                  <MessageSquare className="h-5 w-5 text-primary" />
+                  <div>
+                    <h2 className="text-lg font-semibold tracking-tight text-foreground">Expert Corrections</h2>
+                    <p className="text-xs text-muted-foreground">
+                      Protocol edits you've submitted. These are fed back into the AI to improve future plans.
+                    </p>
+                  </div>
+                </div>
+                <CorrectionsHistory />
               </div>
             </TabsContent>
           </Tabs>

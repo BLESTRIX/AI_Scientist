@@ -20,7 +20,7 @@ dotenv.config();
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 type NoveltySignal = "not found" | "similar work exists" | "exact match found";
-
+const SAVED_EXPERIMENTS_TABLE = "saved_experiments";
 interface Reference {
   title: string;
   url: string;
@@ -668,5 +668,69 @@ app.listen(PORT, () => {
   console.log(`   TAVILY_API_KEY : ${process.env.TAVILY_API_KEY ? "✓ set" : "✗ MISSING"}`);
   console.log(`   SUPABASE_URL   : ${SUPABASE_URL ? "✓ set" : "✗ MISSING"}`);
 });
+// ─── POST /api/experiments/save ──────────────────────────────────────────────
+app.post("/api/experiments/save", async (req: Request, res: Response) => {
+  const { user_id, hypothesis, protocol_data, budget_total } = req.body as {
+    user_id?: string;
+    hypothesis?: string;
+    protocol_data?: Record<string, unknown>;
+    budget_total?: number;
+  };
+  if (!user_id) { res.status(400).json({ error: "user_id is required." }); return; }
+  if (!hypothesis?.trim()) { res.status(400).json({ error: "hypothesis is required." }); return; }
 
+  try {
+    const { data, error } = await supabase.from(SAVED_EXPERIMENTS_TABLE).insert({
+      user_id,
+      hypothesis: hypothesis.trim(),
+      protocol_data: protocol_data ?? {},
+      budget_total: budget_total ?? null,
+    }).select("id").single();
+
+    if (error) throw error;
+    res.json({ success: true, id: data?.id });
+  } catch (err) {
+    console.error("/api/experiments/save error:", err);
+    res.status(500).json({ error: "Failed to save experiment.", detail: String(err) });
+  }
+});
+
+// ─── GET /api/experiments ─────────────────────────────────────────────────────
+app.get("/api/experiments", async (req: Request, res: Response) => {
+  const { user_id } = req.query as { user_id?: string };
+  if (!user_id) { res.status(400).json({ error: "user_id query param required." }); return; }
+
+  try {
+    const { data, error } = await supabase
+      .from(SAVED_EXPERIMENTS_TABLE)
+      .select("id, hypothesis, budget_total, created_at")
+      .eq("user_id", user_id)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+    res.json({ experiments: data ?? [] });
+  } catch (err) {
+    console.error("/api/experiments error:", err);
+    res.status(500).json({ error: "Failed to fetch experiments.", detail: String(err) });
+  }
+});
+
+// ─── DELETE /api/experiments/:id ─────────────────────────────────────────────
+app.delete("/api/experiments/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { user_id } = req.body as { user_id?: string };
+  if (!user_id) { res.status(400).json({ error: "user_id is required." }); return; }
+
+  try {
+    const { error } = await supabase
+      .from(SAVED_EXPERIMENTS_TABLE)
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user_id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (err) {
+    console.error("/api/experiments/:id DELETE error:", err);
+    res.status(500).json({ error: "Failed to delete experiment.", detail: String(err) });
+  }
+});
 module.exports = app;
